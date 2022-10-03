@@ -165,11 +165,12 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
         BarrierUpdateRequest request = builder.addBarrier(options.getName(), enterBarrier,pendingIntent).build();
         Awareness.getBarrierClient(this).updateBarriers(request)
                 .addOnSuccessListener(aVoid->{
-                    Snackbar.make(mapView,"Geofence enabled",Snackbar.LENGTH_SHORT).show();
+
+                    Toast.makeText(this,"Geofence "+options.getName()+" enabled",Toast.LENGTH_SHORT).show();
                 })
                 .addOnFailureListener(e->{
                     Log.e("MainActivity",e.getMessage());
-                    Toast.makeText(this,"Failed to add the geofence, please try again",Toast.LENGTH_LONG).show();
+                    Toast.makeText(this,"Failed to add the geofence "+options.getName()+", please try again",Toast.LENGTH_LONG).show();
                     removePreviousGeofence();
                 });
     }
@@ -219,7 +220,7 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
             barrierReceiver=null;
             // Define a request for updating a barrier.
             BarrierUpdateRequest.Builder builder = new BarrierUpdateRequest.Builder();
-            BarrierUpdateRequest request = builder.deleteBarrier(GeofenceEventReceiver.GEOFENCE_LABEL).build();
+            BarrierUpdateRequest request = builder.deleteAll().build();
             Awareness.getBarrierClient(this).updateBarriers(request)
                     // Callback listener for execution success.
                     .addOnSuccessListener(aVoid -> Toast.makeText(getApplicationContext(), "delete barrier success", Toast.LENGTH_SHORT).show())
