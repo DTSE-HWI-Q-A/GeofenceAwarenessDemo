@@ -31,7 +31,7 @@ public class GeofenceEventReceiver extends BroadcastReceiver {
         switch(barrierStatus.getPresentStatus()) {
             case BarrierStatus.TRUE:
                 Log.i(TAG, label + " status:true");
-                if(listener!=null) listener.statusIn();
+                if(listener!=null) listener.statusIn(label);
                 break;
             case BarrierStatus.FALSE:
                 Log.i(TAG, label + " status:false");
@@ -47,7 +47,7 @@ public class GeofenceEventReceiver extends BroadcastReceiver {
 
 
     public interface GeofenceStatusListener{
-        void statusIn();
+        void statusIn(String label);
         void statusOut();
         void statusUnknown();
     }

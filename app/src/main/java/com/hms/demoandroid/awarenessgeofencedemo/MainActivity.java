@@ -10,6 +10,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -27,6 +28,8 @@ import com.huawei.hms.maps.MapView;
 import com.huawei.hms.maps.model.Circle;
 import com.huawei.hms.maps.model.CircleOptions;
 import com.huawei.hms.maps.model.LatLng;
+
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements GeofenceEventReceiver.GeofenceStatusListener {
 
@@ -56,8 +59,19 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
         this.huaweiMap=huaweiMap;//Recover your huawei map when loaded
         if(checkLocationPermission()){
             setupMap();//Enable the features based on location
+            setupDefaultGeofences();
         }else requestLocationPermissions();
 
+    }
+
+    private void setupDefaultGeofences() {
+        if(huaweiMap!=null){
+            //Recover the list of default geofences
+            ArrayList<GeofenceOptions> geofences=getDefaultGeofences();
+            for(GeofenceOptions geofence:geofences){//Explore each element on the list
+                configNewGeofence(geofence);
+            }
+        }
     }
 
     private void requestLocationPermissions() {
@@ -75,11 +89,12 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if(checkLocationPermission()){
             setupMap();
+
         }
     }
 
     private void setupMap() {
-        huaweiMap.setOnMapLongClickListener(this::onLongClick);//The long click event will be reported to the onLongClick method in this class
+        //huaweiMap.setOnMapLongClickListener(this::onLongClick);//The long click event will be reported to the onLongClick method in this class
         huaweiMap.setMyLocationEnabled(true);//enable real time location
         huaweiMap.setWatermarkEnabled(true);//removes the Petal Map watermark
     }
@@ -107,10 +122,7 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
     private void configNewGeofence(LatLng position) {
         //Draw a circle on the map
         Log.e("Coordinates","Lat:"+position.latitude+"\tLon:"+position.longitude);
-        CircleOptions circle=new CircleOptions();
-        circle.center(position);
-        circle.radius(FIXED_RADIUS);
-        graphicalGeofence=huaweiMap.addCircle(circle);
+        drawCircle(position);
         //Setup Awareness geofence
         AwarenessBarrier enterBarrier = LocationBarrier.enter(position.latitude,position.longitude, FIXED_RADIUS);
         //Define PendingIntent that will be triggered upon a barrier status change, and register a broadcast receiver to receive the broadcast.
@@ -131,6 +143,65 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
                     Toast.makeText(this,"Failed to add the geofence, please try again",Toast.LENGTH_LONG).show();
                     removePreviousGeofence();
                 });
+    }
+
+    @SuppressLint("MissingPermission") //This method will be only called after checking the permission
+    private void configNewGeofence(GeofenceOptions options) {
+        //Draw a circle on the map
+        Log.e("Coordinates","Lat:"+options.getLat()+"\tLon:"+options.getLon());
+        drawCircle(new LatLng(options.getLat(),options.getLon()),options.getRadius());
+        //Setup Awareness geofence
+        AwarenessBarrier enterBarrier = LocationBarrier.enter(options.getLat(),options.getLon(), options.getRadius());
+        //Define PendingIntent that will be triggered upon a barrier status change, and register a broadcast receiver to receive the broadcast.
+        Intent intent = new Intent(GeofenceEventReceiver.RECEIVER_ACTION);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 1, intent,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+        if(barrierReceiver==null){
+            barrierReceiver = new GeofenceEventReceiver();
+            barrierReceiver.register(this);
+            barrierReceiver.setListener(this);//the barrier receiver will send updates through the interface
+        }
+        //add the barrier
+        BarrierUpdateRequest.Builder builder = new BarrierUpdateRequest.Builder();
+        BarrierUpdateRequest request = builder.addBarrier(options.getName(), enterBarrier,pendingIntent).build();
+        Awareness.getBarrierClient(this).updateBarriers(request)
+                .addOnSuccessListener(aVoid->{
+                    Snackbar.make(mapView,"Geofence enabled",Snackbar.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e->{
+                    Log.e("MainActivity",e.getMessage());
+                    Toast.makeText(this,"Failed to add the geofence, please try again",Toast.LENGTH_LONG).show();
+                    removePreviousGeofence();
+                });
+    }
+
+    private void drawCircle(LatLng position) {
+        CircleOptions circle=new CircleOptions();
+        //Define the circle origin and radius
+        circle.center(position);
+        circle.radius(FIXED_RADIUS);
+        //Define the circle's fill color and border color
+        Resources res=getResources();
+        int solidBlue=res.getColor(R.color.solid_blue,getTheme());
+        int cristalBlue=res.getColor(R.color.cristal_blue,getTheme());
+        circle.fillColor(cristalBlue);
+        circle.strokeColor(solidBlue);
+        //Draw the circle
+        graphicalGeofence=huaweiMap.addCircle(circle);
+    }
+
+    private void drawCircle(LatLng position,double radius) {
+        CircleOptions circle=new CircleOptions();
+        //Define the circle origin and radius
+        circle.center(position);
+        circle.radius(radius);
+        //Define the circle's fill color and border color
+        Resources res=getResources();
+        int solidBlue=res.getColor(R.color.solid_blue,getTheme());
+        int cristalBlue=res.getColor(R.color.cristal_blue,getTheme());
+        circle.fillColor(cristalBlue);
+        circle.strokeColor(solidBlue);
+        //Draw the circle
+        graphicalGeofence=huaweiMap.addCircle(circle);
     }
 
     private void removePreviousGeofence() {
@@ -211,9 +282,9 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
     }
 
     @Override
-    public void statusIn() {
+    public void statusIn(String label) {
         //do something when the user enters into the geofence
-        displayNotification("You are inside the geofence");
+        displayNotification("You are entering "+label);
     }
 
     @Override
@@ -235,5 +306,18 @@ public class MainActivity extends AppCompatActivity implements GeofenceEventRece
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         manager.notify(notificationId,builder.build());
         notificationId+=1;
+    }
+
+    private ArrayList<GeofenceOptions> getDefaultGeofences(){
+        //Create a list
+        ArrayList<GeofenceOptions> geofences=new ArrayList<>();
+        //here you can add cities, modify the radius according to the size of the city
+        //Adding CDMX
+        geofences.add(new GeofenceOptions(19.42847, -99.12766,20000.0,"CDMX"));
+        //Adding Guadalajara
+        geofences.add(new GeofenceOptions(20.66682 , -103.39182,20000.0,"GDLG"));
+        //Adding Monterrey
+        geofences.add(new GeofenceOptions( 25.67507, -100.31847,20000.0,"MTY"));
+        return geofences;
     }
 }
